@@ -1,4 +1,4 @@
-# A Bitcoin implementation from scratch using only Python standard library.
+# A Bitcoin implementation from scratch using only the Python standard library.
 # The code follows what described by Andrej Karpathy in his blog post "A from-scratch tour of Bitcoin in Python" (http://karpathy.github.io/2021/06/21/blockchain/).
 # I rewrote the code using a different structure and took advantage of some already implemented algorithms from the standard library.
 # Other useful resources: http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html
@@ -12,7 +12,7 @@ from typing import List, Union
 # -----------------------------------------------------------------------
 # HELPER FUNCTIONS
 
-def inv(n, p):
+def inv(n: int, p: int) -> int:
     """ Returns modular multiplicate inverse m s.t. (n * m) % p == 1 """
     # Extended Euclideean Algorithm
     old_r, r = n, p
@@ -26,11 +26,11 @@ def inv(n, p):
     gcd, x, y = old_r, old_s, old_t
     return x % p
 
-def encode_int(i, nbytes, encoding='little'):
-    """ Encode integer i into nbytes bytes using a given byte ordering. """
+def encode_int(i: int, nbytes: int, encoding: str = 'little') -> bytes:
+    """ Encode integer i into n-bytes using a given byte ordering. """
     return i.to_bytes(nbytes, encoding)
 
-def encode_varint(i):
+def encode_varint(i: int) -> bytes:
     """ Encode a (possibly but rarely large) integer into bytes with a super simple compression scheme. """
     if i < 0xfd:
         return bytes([i])
@@ -106,6 +106,7 @@ class Point:
             k >>= 1
         return result
 
+# Define extreme point special case
 INF = Point(None, None, None)
 
 
@@ -122,11 +123,11 @@ class Generator:
 # The private key is a 256-bit string between 1 and the order of the generating point.
 # The public key is a tuple given by the multiplication of the private key and the publicly known generating point.
 # However, the public key, in order to be useful, has to be encoded (with the addition of a publicly known prefix) into a 512-bit string using the HASH256 and RIPEMD160 functions.
-# (Note: even though theoretically possible, it's extremely unlikely that someone would be able to derive (or even randomly guess) the private key from the public key.)
-# To genereate the addres from the publi key:
-#      (1) hash down to 160 bits using the sha-256 and RIPEMD has algorithms
-#      (2) encode the key in ASCII using Base58Check encoding. 
-# (Note: you cannot determine the public key or the private key from the address.)
+# [Note: even though theoretically possible, it's extremely unlikely that someone would be able to derive (or even randomly guess) the private key from the public key.]
+# To genereate the addres from the public key:
+#      (1) hash down to 160 bits using the HASH256 and RIPEMD160 algorithms
+#      (2) encode the key in ASCII using Base58Check encoding
+# [Note: you cannot determine the public key or the private key from the address.]
 
 class GenerateWallet(Point):
     """
@@ -150,14 +151,15 @@ class GenerateWallet(Point):
         # Special case which handles the leading 0 bytes
         num_leading_zeros = len(b) - len(b.lstrip(b'\x00'))
         res = num_leading_zeros * alphabet[0] + ''.join(reversed(chars))
+
         return res
 
-    def get_secret_key(self, generator: Generator):
+    def get_secret_key(self, generator: Generator) -> int:
         """ Generate secret key (a random 256-bit string). """
         return random.randrange(1, generator.n)
 
     def get_public_key(self, secret_key, point: Point, compressed: bool, hash160: bool = False):
-        """ Generate and encode public key (a 512-bit string derived from the secret key with a prefix). """
+        """ Generate and encode public key (a 512-bit string derived from the secret key with the addition of a prefix). """
         # Calculate public key
         public_key = secret_key * point
 
@@ -171,6 +173,7 @@ class GenerateWallet(Point):
 
         # Hash if requested
         if hash160:
+            # HASH256 and RIPEMD160 functions
             sha = hashlib.sha256()
             rip = hashlib.new('ripemd160')
             sha.update(pkb)
@@ -193,22 +196,22 @@ class GenerateWallet(Point):
         checksum = sha.digest()[:4]
         # Append to form the full 25-byte binary Bitcoin address
         byte_address = ver_pkb_hash + checksum
-        # b58 endode the result
+        # Base58Check for encoding the result
         b58check_address = self.b58encode(byte_address)
         return b58check_address
 
 
 
 # ----------------------------------- Transactions ----------------------------------- #
-# Every transtaction has:
+# Every transtaction has the following elements:
 #     -  transaction id -> a SHA256 double hash of the transaction data structure
-#     -  one or more inputs -> either one big amount being spent or multiple smaller amounts combined.
-#     -  one or two outputs -> one for who receives the payment, and (only if needed) one returning the change to the sender.
+#     -  one or more inputs -> either one big amount being spent or multiple smaller amounts combined
+#     -  one or two outputs -> one for who receives the payment, and (only if needed) one returning the change to the sender
 #     -  some other information such as the size of the transaction in bytes, the block in which it is included, the fees, etc...
 # The Transaction will be considered valid if the sum of all outputs is lower than the sum of all inputs. 
 # The difference between input and outputs, is given by the fee that goes to the miner of the block.
 # Bitcoin has a stack-based scripting language, which is responsible for running the transaction operations.
-# For example it verifies that the public keys provided is valid and that it relates in the correct way with signature.
+# For example it verifies that the public key provided is valid and that it relates correctly with the signature.
 
 class Script:
     """ 
@@ -222,10 +225,10 @@ class Script:
         out = []
         for cmd in self.cmds:
             if isinstance(cmd, int):
-                # An int is just an opcode, encode as a single byte
+                # An int is just an opcode -> encode as a single byte
                 out += [encode_int(cmd, 1)]
             elif isinstance(cmd, bytes):
-                # Bytes represent an element, encode its length and then content
+                # Bytes represent an element -> encode its length and then content
                 length = len(cmd)
                 assert length < 75
 
