@@ -112,7 +112,11 @@ INF = Point(None, None, None)
 
 class Generator:
     """ A generator over a curve -> an initial point and the (pre-computed) order. """
-    def __init__(self, G: Point, n: int) -> None:
+    def __init__(
+        self, 
+        G: Point,  # Initial point
+        n: int     # Order
+    ) -> None:
         self.G = G
         self.n = n
 
@@ -198,6 +202,7 @@ class GenerateWallet(Point):
         byte_address = ver_pkb_hash + checksum
         # Base58Check for encoding the result
         b58check_address = self.b58encode(byte_address)
+
         return b58check_address
 
 
@@ -218,10 +223,13 @@ class Script:
         A simple implementation of the Script structure.
         It works by storing the script types as numbers and then encoding them into bytes.
     """
-    def __init__(self, cmds: List[Union[int, bytes]]) -> None:
+    def __init__(
+        self,
+        cmds: List[Union[int, bytes]]  # Commands, i.e. list of opcodes 
+    ) -> None:
         self.cmds = cmds
 
-    def encode(self):
+    def encode(self) -> bytes:
         out = []
         for cmd in self.cmds:
             if isinstance(cmd, int):
@@ -252,12 +260,12 @@ class Transaction:
     # Creates the structure for the transaction input
     def create_transaction_input(
         self,
-        prev_transaction_id: bytes,
-        prev_transaction_idx: int,
-        publickey_hash: str,
-        script_sig: Script = None,   # Script in new transaction  -> must provide the data to satisfy the conditions of the script in the old transaction
-        sequence: int = 0xffffffff
-    ):
+        prev_transaction_id: bytes,  # Id of the previous transaction
+        prev_transaction_idx: int,   # Chain index of the previous transaction
+        publickey_hash: str,         # Hash of the sender's public key
+        script_sig: Script = None,   # Script in new the transaction which must provide the data to satisfy the conditions of the script in the old transaction
+        sequence: int = 0xffffffff   # Originally intended for a type of “high frequency trade” functionality, but it has a very limited uses today
+    ) -> dict:
         return { 
             'prev_transaction_id': prev_transaction_id, 
             'prev_transaction_idx': prev_transaction_idx, 
@@ -266,8 +274,8 @@ class Transaction:
             'prev_transaction_script_pubkey': Script([118, 169, publickey_hash, 126, 172])
         }
 
-    def encode_transaction_input(self, transaction_input, script_override = None):
-        """ Returns the given transaction input encoded in bytes. It's just serialization protocol. """
+    def encode_transaction_input(self, transaction_input: dict, script_override: bool = None) -> bytes:
+        """ Returns the given transaction input encoded in bytes. It's just a serialization protocol. """
         out = []
         out += [transaction_input['prev_transaction_id'][::-1]]
         out += [encode_int(transaction_input['prev_transaction_idx'], 4)]
@@ -291,15 +299,15 @@ class Transaction:
     # Creates the structure for the transaction output
     def create_transaction_output(
         self, 
-        amount: int, 
-        script_pubkey: Script  # Script in old transaction -> defines the conditions for spending the bitcoins
-    ):
+        amount: int,           # Amount of bitcoin to transfer in satoshi units
+        script_pubkey: Script  # Script in old transaction which defines the conditions for spending the bitcoins
+    ) -> dict:
         return {
             'amount': amount, 
             'script_pubkey': script_pubkey
         }
 
-    def encode_transaction_output(self, transaction_output):
+    def encode_transaction_output(self, transaction_output) -> bytes:
         """ Returns the given transaction output encoded in bytes. It's just serialization protocol. """
         out = []
         out += [encode_int(transaction_output['amount'], 8)]
@@ -308,7 +316,7 @@ class Transaction:
 
     def encode(self, transaction_inputs: List[dict], transaction_outputs: List[dict], sig_index: int = -1) -> bytes:
         """
-            Encode this transaction as bytes.
+            Encode the transaction as bytes.
             If sig_index is given then return the modified transaction encoding of this transaction with respect to the single input index. 
             This result then consitutes the "message" that gets signed by the aspiring transactor of this input.
         """
@@ -337,10 +345,10 @@ class Transaction:
 
         return b''.join(out)
 
-    def transaction_id(self, transaction_inputs: List[dict], transaction_outputs: List[dict]) -> str:
+    def transaction_id(self, transaction_inputs: List[dict], transaction_outputs: List[dict], sig_index: int = -1) -> str:
         """ Return id of the finished transaction. """
         sha = hashlib.sha256()
-        sha.update(self.encode(transaction_inputs, transaction_outputs))
+        sha.update(self.encode(transaction_inputs, transaction_outputs, sig_index))
         res = sha.digest()
         sha = hashlib.sha256()
         sha.update(res)
@@ -349,7 +357,7 @@ class Transaction:
 
 class Signature:
     """ 
-        Data structure for the signature, which is simply a tuple of two integers (r, s)
+        Data structure for the signature: a tuple of two integers (r, s).
     """
     def __init__(self, r: int, s: int) -> None:
         self.r = r
@@ -369,7 +377,7 @@ class Signature:
         frame = b''.join([bytes([0x30, len(content)]), content])
         return frame
 
-def sign(secret_key: int, message: bytes, generator: Generator):
+def sign(secret_key: int, message: bytes, generator: Generator) -> Signature:
     """ Given the private key, the message and the generator, returns the signature that it is necessary for a transaction to be valid. """
     # Get order of the elliptic curve
     n = generator.n
